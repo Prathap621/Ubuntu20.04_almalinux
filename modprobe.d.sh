@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Function to create a config file and disable cramfs
+# Function to create a config file and updating modprobe.d
 create_config_file() {
     local config_file=$1
 
