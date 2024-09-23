@@ -30,7 +30,7 @@ uninstall_package() {
 changes_made=false
 
 # Services to check and uninstall
-declare -a services=("apache2" "squid" "vsftpd" "bind9" "nis" "cups" "rsh-client" "snmpd" "talk" "xserver-xorg*")
+declare -a services=("apache2" "squid" "vsftpd" "bind9" "nis" "cups" "rsh-client" "snmpd" "talk" "xserver-xorg*" "slapd")
 
 # Check and uninstall services
 for service in "${services[@]}"; do
@@ -41,16 +41,24 @@ done
 if [ -x "$(command -v systemctl)" ]; then
     echo "Checking for custom services..."
     
-    # Example for custom service steps like stopping services
+    # Stop bind9 DNS server if active
     if systemctl is-active --quiet bind9; then
         sudo systemctl stop bind9
         echo "Stopped bind9 service."
         changes_made=true
     fi
     
+    # Stop CUPS service if active
     if systemctl is-active --quiet cups; then
         sudo systemctl stop cups
         echo "Stopped CUPS service."
+        changes_made=true
+    fi
+    
+    # Stop LDAP server if active
+    if systemctl is-active --quiet slapd; then
+        sudo systemctl stop slapd
+        echo "Stopped slapd (LDAP) service."
         changes_made=true
     fi
 fi
