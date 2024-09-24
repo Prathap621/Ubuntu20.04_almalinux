@@ -65,6 +65,31 @@ disable_rds() {
     fi
 }
 
+# Function to disable SCTP if necessary
+disable_sctp() {
+    local sctp_config="/etc/modprobe.d/sctp.conf"
+
+    # Check if the sctp.conf file exists
+    if [ ! -f "$sctp_config" ]; then
+        # Create the sctp.conf file
+        sudo touch "$sctp_config"
+        sudo chmod 644 "$sctp_config"
+        echo "install sctp /bin/true" | sudo tee "$sctp_config" > /dev/null
+        log_action "DISABLE" "SCTP has been disabled in $sctp_config."
+    else
+        log_action "EXISTS" "SCTP is already disabled in $sctp_config."
+    fi
+}
+
+# Function to verify if SCTP is disabled
+verify_sctp_disabled() {
+    if lsmod | grep -q sctp; then
+        log_action "STATUS" "SCTP is still enabled."
+    else
+        log_action "STATUS" "SCTP is disabled."
+    fi
+}
+
 # Determine the distribution and architecture
 if [ -f /etc/os-release ]; then
     . /etc/os-release
@@ -84,6 +109,7 @@ if [[ "$DISTRO_NAME" == "ubuntu" && ("$VERSION" == "20.04" || "$VERSION" == "22.
         log_action "INFO" "Supported Ubuntu version ($VERSION) with architecture ($ARCH). Proceeding with configuration."
         disable_dccp
         disable_rds
+        disable_sctp
     else
         log_action "ERROR" "Unsupported architecture for Ubuntu: $ARCH. Exiting."
         exit 1
@@ -91,6 +117,7 @@ if [[ "$DISTRO_NAME" == "ubuntu" && ("$VERSION" == "20.04" || "$VERSION" == "22.
 elif [[ "$DISTRO_NAME" == "almalinux" || "$DISTRO_NAME" == "rhel" || "$DISTRO_NAME" == "centos" ]]; then
     log_action "INFO" "Supported Red Hat flavor ($DISTRO_NAME) detected. Proceeding with configuration."
     disable_rds
+    disable_sctp
 else
     log_action "ERROR" "Unsupported operating system: $DISTRO_NAME. Exiting."
     exit 1
@@ -110,5 +137,12 @@ declare -A config_files=(
 for config_file in "${!config_files[@]}"; do
     create_config_file "$config_file" "${config_files[$config_file]}"
 done
+
+# Reload kernel modules
+sudo update-initramfs -u
+log_action "INFO" "Kernel modules reloaded."
+
+# Verify if SCTP is disabled
+verify_sctp_disabled
 
 log_action "INFO" "System configuration tasks completed."
