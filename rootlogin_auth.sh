@@ -6,32 +6,40 @@ if [ "$EUID" -ne 0 ]; then
   exit 1
 fi
 
-# Location of the sshd_config file
-sshd_config_file="/etc/ssh/sshd_config"
+# Location of the sshd_config file based on OS
+if [ -f /etc/lsb-release ]; then
+    # Ubuntu
+    sshd_config_file="/etc/ssh/sshd_config"
+    os_version=$(lsb_release -rs)
+    architecture=$(uname -m)
+    if [[ "$os_version" =~ ^(20\.04|22\.04|24\.04)$ ]] && [[ "$architecture" == "x86_64" || "$architecture" == "aarch64" ]]; then
+        log_action "Supported Ubuntu version: $os_version ($architecture)"
+    else
+        log_action "Unsupported Ubuntu version or architecture: $os_version ($architecture)"
+        exit 1
+    fi
+elif [ -f /etc/redhat-release ]; then
+    # Red Hat-based (including CentOS, Fedora)
+    sshd_config_file="/etc/ssh/sshd_config"
+    os_version=$(rpm --eval '%{rhel}')
+    architecture=$(uname -m)
+    if [[ "$os_version" -ge 7 ]] && [[ "$architecture" == "x86_64" || "$architecture" == "aarch64" ]]; then
+        log_action "Supported Red Hat version: $os_version ($architecture)"
+    else
+        log_action "Unsupported Red Hat version or architecture: $os_version ($architecture)"
+        exit 1
+    fi
+else
+    log_action "Unsupported OS."
+    exit 1
+fi
+
 log_file="/root/output.log"
 
 # Function to log messages
 log_action() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$log_file"
 }
-
-# Function to check OS version and architecture
-check_system() {
-    # Get the OS version and architecture
-    os_version=$(lsb_release -rs)
-    architecture=$(uname -m)
-
-    # Check if the OS is supported
-    if [[ "$os_version" =~ ^(20\.04|22\.04|24\.04)$ ]] && [[ "$architecture" == "x86_64" || "$architecture" == "aarch64" ]]; then
-        return 0
-    else
-        log_action "Unsupported OS version or architecture: $os_version ($architecture)"
-        exit 1
-    fi
-}
-
-# Check the system
-check_system
 
 # Check and update PermitRootLogin
 if grep -q "PermitRootLogin" "$sshd_config_file"; then
