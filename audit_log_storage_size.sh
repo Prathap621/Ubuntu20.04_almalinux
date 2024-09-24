@@ -45,8 +45,9 @@ check_os_and_arch() {
 
 # Check if auditd package is installed
 check_and_install_auditd() {
-    if ! dpkg -s auditd &> /dev/null; then
+    if ! dpkg -s auditd >/dev/null 2>&1; then
         log_message "Doesn't Exist: auditd is not installed. Installing..."
+        sudo apt update
         if sudo apt install -y auditd; then
             log_message "Installed: Successfully installed auditd."
         else
@@ -61,8 +62,9 @@ check_and_install_auditd() {
 
 # Check if audispd-plugins package is installed
 check_and_install_audispd_plugins() {
-    if ! dpkg -s audispd-plugins &> /dev/null; then
+    if ! dpkg -s audispd-plugins >/dev/null 2>&1; then
         log_message "Doesn't Exist: audispd-plugins is not installed. Installing..."
+        sudo apt update
         if sudo apt install -y audispd-plugins; then
             log_message "Installed: Successfully installed audispd-plugins."
         else
@@ -97,12 +99,63 @@ restart_auditd_service() {
     fi
 }
 
+# Check if auditd is enabled
+check_and_enable_auditd() {
+    if systemctl is-enabled auditd | grep -q "enabled"; then
+        log_message "Exists: auditd is already enabled."
+        echo "auditd is already enabled."
+    else
+        log_message "Doesn't Exist: Enabling auditd..."
+        echo "Enabling auditd..."
+        if systemctl --now enable auditd; then
+            log_message "Enabled: Successfully enabled auditd."
+            echo "auditd has been enabled."
+        else
+            log_message "Failed: Error enabling auditd."
+            echo "Error enabling auditd. Check the log for details."
+            exit 1
+        fi
+    fi
+
+    # Verify the status
+    if systemctl is-enabled auditd; then
+        log_message "Verified: auditd is enabled."
+    else
+        log_message "Failed: auditd is not enabled after attempting to enable it."
+        echo "Error: auditd is not enabled. Check the log for details."
+        exit 1
+    fi
+}
+
+# Check if the audit=1 parameter is set in the GRUB configuration
+check_and_set_grub_audit() {
+    if grep -q "^\s*linux" "/boot/grub/grub.cfg" | grep -qv "audit=1"; then
+        # Add the audit=1 parameter to GRUB_CMDLINE_LINUX in /etc/default/grub
+        sudo sed -i 's/^GRUB_CMDLINE_LINUX="\(.*\)"/GRUB_CMDLINE_LINUX="\1 audit=1"/' /etc/default/grub
+
+        # Update the grub configuration
+        if sudo update-grub; then
+            log_message "Updated: audit=1 parameter added to GRUB configuration. Auditing for pre-auditd processes is enabled."
+            echo "audit=1 parameter added to GRUB configuration. Auditing for pre-auditd processes is enabled."
+        else
+            log_message "Failed: Error updating GRUB configuration."
+            echo "Error updating GRUB configuration. Check the log for details."
+            exit 1
+        fi
+    else
+        log_message "Exists: audit=1 parameter is already set in the GRUB configuration."
+        echo "audit=1 parameter is already set in the GRUB configuration."
+    fi
+}
+
 # Execute the checks and updates
 check_os_and_arch
 check_and_install_auditd
 check_and_install_audispd_plugins
 update_auditd_conf
 restart_auditd_service
+check_and_enable_auditd
+check_and_set_grub_audit
 
 # Inform the user that the audit log storage size has been configured
 echo "Audit log storage size has been configured to ${storage_size_mb} MB."
