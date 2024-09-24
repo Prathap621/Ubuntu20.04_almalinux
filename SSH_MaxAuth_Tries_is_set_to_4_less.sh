@@ -30,22 +30,32 @@ log_action "Detected operating system: $OS"
 if [[ "$OS" == "Ubuntu" ]]; then
     SSHD_CONFIG="/etc/ssh/sshd_config"
     if [ -f "$SSHD_CONFIG" ]; then
-        # Remove any existing MaxAuthTries setting to avoid duplicates
-        sed -i '/^MaxAuthTries/d' "$SSHD_CONFIG"
-        # Add the new MaxAuthTries setting
-        echo "MaxAuthTries 4" >> "$SSHD_CONFIG"
-        log_action "SSH MaxAuthTries has been set to 4 or less for Ubuntu."
+        # Check if MaxAuthTries is already set to 4
+        if grep -q '^MaxAuthTries 4$' "$SSHD_CONFIG"; then
+            log_action "MaxAuthTries is already set to 4 for Ubuntu."
+        else
+            # Remove any existing MaxAuthTries setting to avoid duplicates
+            sed -i '/^MaxAuthTries/d' "$SSHD_CONFIG"
+            # Add the new MaxAuthTries setting
+            echo "MaxAuthTries 4" >> "$SSHD_CONFIG"
+            log_action "SSH MaxAuthTries has been set to 4 for Ubuntu."
+        fi
     else
         log_action "File /etc/ssh/sshd_config not found for Ubuntu."
     fi
 elif [[ "$OS" == "AlmaLinux" ]]; then
     SSHD_CONFIG="/etc/ssh/sshd_config"
     if [ -f "$SSHD_CONFIG" ]; then
-        # Remove any existing MaxAuthTries setting to avoid duplicates
-        sed -i '/^MaxAuthTries/d' "$SSHD_CONFIG"
-        # Add the new MaxAuthTries setting
-        echo "MaxAuthTries 4" >> "$SSHD_CONFIG"
-        log_action "SSH MaxAuthTries has been set to 4 or less for AlmaLinux."
+        # Check if MaxAuthTries is already set to 4
+        if grep -q '^MaxAuthTries 4$' "$SSHD_CONFIG"; then
+            log_action "MaxAuthTries is already set to 4 for AlmaLinux."
+        else
+            # Remove any existing MaxAuthTries setting to avoid duplicates
+            sed -i '/^MaxAuthTries/d' "$SSHD_CONFIG"
+            # Add the new MaxAuthTries setting
+            echo "MaxAuthTries 4" >> "$SSHD_CONFIG"
+            log_action "SSH MaxAuthTries has been set to 4 for AlmaLinux."
+        fi
     else
         log_action "File /etc/ssh/sshd_config not found for AlmaLinux."
     fi
