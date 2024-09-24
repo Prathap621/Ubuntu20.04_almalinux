@@ -1,47 +1,58 @@
 #!/bin/bash
 
-# Define log file
-LOGFILE="/root/output.log"
+# Log file path
+LOG_FILE="/root/output.log"
 
-# Function to log actions
-log_action() {
-    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOGFILE"
+# Function to log messages
+log_message() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
 }
 
-# Check OS and architecture compatibility
-if [[ -f /etc/os-release ]]; then
-    . /etc/os-release
-    if [[ "$ID" == "ubuntu" && ("$VERSION_ID" == "20.04" || "$VERSION_ID" == "22.04" || "$VERSION_ID" == "24.04") ]]; then
-        ARCH=$(uname -m)
-        if [[ "$ARCH" == "x86_64" || "$ARCH" == "arm64" ]]; then
-            OS_COMPATIBLE=true
-        else
-            log_action "Unsupported architecture: $ARCH"
-            echo "Unsupported architecture: $ARCH"
-            exit 1
-        fi
-    elif [[ "$ID" == "rhel" || "$ID" == "centos" || "$ID" == "fedora" ]]; then
-        OS_COMPATIBLE=true
+# Check if the OS is Ubuntu
+if [[ -f /etc/lsb-release ]]; then
+    UBUNTU_VERSION=$(grep "DISTRIB_RELEASE" /etc/lsb-release | cut -d '=' -f 2)
+    if [[ "$UBUNTU_VERSION" =~ ^(20\.04|22\.04|24\.04)$ ]]; then
+        CRON_SERVICE="cron"
+        log_message "Ubuntu version $UBUNTU_VERSION matched."
     else
-        log_action "Unsupported OS: $ID $VERSION_ID"
-        echo "Unsupported OS: $ID $VERSION_ID"
+        log_message "Ubuntu version $UBUNTU_VERSION does not match required versions."
+        exit 1
+    fi
+elif [[ -f /etc/os-release ]]; then
+    if grep -q "AlmaLinux" /etc/os-release; then
+        CRON_SERVICE="crond"
+        log_message "AlmaLinux matched."
+    elif grep -q "Red Hat" /etc/os-release; then
+        CRON_SERVICE="crond"
+        log_message "Red Hat matched."
+    else
+        log_message "Unsupported operating system."
         exit 1
     fi
 else
-    log_action "Cannot determine OS"
-    echo "Cannot determine OS"
+    log_message "Unsupported operating system."
     exit 1
 fi
 
-# Check if the authentication is already required for single user mode
-if grep -q "^auth required pam_securetty.so$" /etc/sulogin; then
-    log_action "Authentication is already required for single user mode."
-    echo "Authentication is already required for single user mode."
+# Check if the cron daemon is enabled
+if [[ $(systemctl is-enabled $CRON_SERVICE) == "disabled" ]]; then
+    # Enable the cron daemon
+    sudo systemctl enable $CRON_SERVICE
+    sudo systemctl start $CRON_SERVICE
+    log_message "Cron daemon has been enabled."
 else
-    # Add the authentication requirement to the sulogin file
-    echo "auth required pam_securetty.so" | sudo tee -a /etc/sulogin > /dev/null
+    log_message "Cron daemon is already enabled."
+fi
 
-    # Inform the user that authentication is now required
-    log_action "Authentication is now required for single user mode."
-    echo "Authentication is now required for single user mode."
+# Check if the cron daemon is running
+if [[ $(systemctl is-active $CRON_SERVICE) == "active" ]]; then
+    log_message "Cron daemon is running."
+else
+    log_message "Cron daemon is not running, attempting to start."
+    sudo systemctl start $CRON_SERVICE
+    if [[ $(systemctl is-active $CRON_SERVICE) == "active" ]]; then
+        log_message "Cron daemon started successfully."
+    else
+        log_message "Failed to start the cron daemon."
+    fi
 fi
