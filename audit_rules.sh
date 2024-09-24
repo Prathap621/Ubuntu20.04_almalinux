@@ -6,6 +6,25 @@ log_message() {
     echo "$(date '+%Y-%m-%d %H:%M:%S') - $message" | tee -a /root/output.log
 }
 
+# Check for the OS type
+if [[ -f /etc/os-release ]]; then
+    . /etc/os-release
+    os_name="$ID"
+    os_version="$VERSION_ID"
+
+    if [[ "$os_name" == "ubuntu" && ("$os_version" == "20.04" || "$os_version" == "22.04" || "$os_version" == "24.04") ]]; then
+        log_message "Detected Ubuntu $os_version."
+    elif [[ "$os_name" == "almalinux" ]]; then
+        log_message "Detected AlmaLinux."
+    else
+        log_message "Unsupported OS: $os_name $os_version."
+        exit 1
+    fi
+else
+    log_message "OS detection failed."
+    exit 1
+fi
+
 # Set the audit rules
 audit_rules=$(cat <<EOF
 -a always,exit -F arch=b64 -S clock_settime -k time-change
@@ -82,46 +101,14 @@ audit_rules=$(cat <<EOF
 -w /sbin/rmmod -p x -k modules
 -w /etc/hosts -p wa -k audit_network_modifications
 -w /etc/issue.net -p wa -k audit_network_modifications
--w /etc/sudoers.d/ -p wa -k scope
--w /var/log/wtmp -p wa -k session
--w /etc/network/ -p wa -k system-locale
--e 2
+-w /etc/sudoers
 EOF
 )
 
-# Determine the architecture
-arch=$(uname -m)
+# Apply the audit rules
+echo "$audit_rules" > /etc/audit/rules.d/audit.rules
+log_message "Audit rules applied."
 
-# Check if the architecture is supported
-if [[ "$arch" != "x86_64" && "$arch" != "aarch64" ]]; then
-    log_message "Unsupported architecture: $arch. Only x86_64 and arm64 (aarch64) are supported."
-    exit 1
-fi
-
-# Check OS version
-os_version=$(lsb_release -sr)
-if [[ "$os_version" != "20.04" && "$os_version" != "22.04" && "$os_version" != "24.04" ]]; then
-    log_message "Unsupported OS version: $os_version. Only Ubuntu 20.04, 22.04, and 24.04 are supported."
-    exit 1
-fi
-
-# Check if audit rules are already set
-existing_rules=$(auditctl -l)
-
-if [[ "$existing_rules" == *"$audit_rules"* ]]; then
-    log_message "Audit rules are already set."
-else
-    log_message "Setting audit rules..."
-    echo "$audit_rules" > /etc/audit/rules.d/custom.rules
-    log_message "Audit rules have been set."
-fi
-
-# Reload audit rules
-augenrules --load
-log_message "Reloaded audit rules."
-
-# Restart auditd service
-service auditd restart
-log_message "Audit service restarted."
-
-log_message "Audit setup completed."
+# Restart the auditd service
+systemctl restart auditd
+log_message "auditd service restarted."
