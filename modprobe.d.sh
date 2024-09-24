@@ -49,6 +49,22 @@ disable_dccp() {
     fi
 }
 
+# Function to disable RDS if necessary
+disable_rds() {
+    local rds_config="/etc/modprobe.d/rds.conf"
+
+    # Check if the rds.conf file exists
+    if [ ! -f "$rds_config" ]; then
+        # Create the rds.conf file
+        sudo touch "$rds_config"
+        sudo chmod 644 "$rds_config"
+        echo "install rds /bin/true" | sudo tee "$rds_config" > /dev/null
+        log_action "DISABLE" "RDS has been disabled in $rds_config."
+    else
+        log_action "EXISTS" "RDS is already disabled in $rds_config."
+    fi
+}
+
 # Determine the distribution and architecture
 if [ -f /etc/os-release ]; then
     . /etc/os-release
@@ -67,12 +83,14 @@ if [[ "$DISTRO_NAME" == "ubuntu" && ("$VERSION" == "20.04" || "$VERSION" == "22.
     if [[ "$ARCH" == "x86_64" || "$ARCH" == "arm64" ]]; then
         log_action "INFO" "Supported Ubuntu version ($VERSION) with architecture ($ARCH). Proceeding with configuration."
         disable_dccp
+        disable_rds
     else
         log_action "ERROR" "Unsupported architecture for Ubuntu: $ARCH. Exiting."
         exit 1
     fi
 elif [[ "$DISTRO_NAME" == "almalinux" || "$DISTRO_NAME" == "rhel" || "$DISTRO_NAME" == "centos" ]]; then
     log_action "INFO" "Supported Red Hat flavor ($DISTRO_NAME) detected. Proceeding with configuration."
+    disable_rds
 else
     log_action "ERROR" "Unsupported operating system: $DISTRO_NAME. Exiting."
     exit 1
