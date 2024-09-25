@@ -50,9 +50,9 @@ fi
 # List of packages to check/install
 packages=(
     "tcpdump"
-    "sar"
+    "sysstat"  # sar is part of the sysstat package
     "telnet"
-    "nslookup"
+    "dnsutils" # nslookup is part of dnsutils
     "curl"
     "traceroute"
     "ping"
@@ -60,11 +60,7 @@ packages=(
     "iperf3"
     "net-tools"
     "iftop"
-    "dnsutils"
     "netcat"
-    "zabbix-agent2"
-    "filebeat"
-    "sysctl"
 )
 
 # Loop through packages and install if necessary
@@ -74,22 +70,28 @@ done
 
 # Install zabbix-agent2 specific steps
 if ! command -v zabbix_agent2 &> /dev/null; then
-    echo "zabbix-agent2 is not installed. Installing..."
+    echo "zabbix-agent2 is not installed. Attempting to install..."
     log_action "not installed" "zabbix-agent2"
+    
     if [[ "$OS" == "ubuntu" ]]; then
-        wget https://repo.zabbix.com/zabbix/6.0/ubuntu/pool/main/z/zabbix-release/zabbix-release_6.0-4+ubuntu20.04_all.deb
-        sudo dpkg -i zabbix-release_6.0-4+ubuntu20.04_all.deb
+        # Update the repo for Ubuntu 22.04
+        wget https://repo.zabbix.com/zabbix/6.0/ubuntu/pool/main/z/zabbix-release/zabbix-release_6.0-4+ubuntu22.04_all.deb
+        sudo dpkg -i zabbix-release_6.0-4+ubuntu22.04_all.deb
         sudo apt update
+        
+        # Install zabbix-agent2
         sudo apt install -y zabbix-agent2 zabbix-agent2-plugin-*
         sudo systemctl restart zabbix-agent2
         sudo systemctl enable zabbix-agent2
-        rm zabbix-release_6.0-4+ubuntu20.04_all.deb
+        
+        # Clean up
+        rm zabbix-release_6.0-4+ubuntu22.04_all.deb
     elif [[ "$OS" == "redhat" ]]; then
-        # Assuming EPEL repo is enabled
         sudo yum install -y zabbix-agent2 zabbix-agent2-plugin-*
         sudo systemctl restart zabbix-agent2
         sudo systemctl enable zabbix-agent2
     fi
+    
     echo "zabbix-agent2 has been installed."
     log_action "installed" "zabbix-agent2"
 else
@@ -97,11 +99,25 @@ else
     log_action "already installed" "zabbix-agent2"
 fi
 
-# Install filebeat (adjust as necessary)
+# Install filebeat with updated key management
 if ! command -v filebeat &> /dev/null; then
     echo "filebeat is not installed. Installing..."
     log_action "not installed" "filebeat"
-    # Add the installation steps for filebeat here, e.g., downloading and installing
+
+    if [[ "$OS" == "ubuntu" ]]; then
+        # Manage GPG key for filebeat repository
+        curl -fsSL https://artifacts.elastic.co/GPG-KEY-elasticsearch | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/elastic.gpg
+        echo "deb https://artifacts.elastic.co/packages/7.x/apt stable main" | sudo tee /etc/apt/sources.list.d/elastic-7.x.list
+        sudo apt update
+        sudo apt install -y filebeat
+        sudo systemctl enable filebeat
+        sudo systemctl start filebeat
+    elif [[ "$OS" == "redhat" ]]; then
+        sudo yum install -y filebeat
+        sudo systemctl enable filebeat
+        sudo systemctl start filebeat
+    fi
+
     echo "filebeat has been installed."
     log_action "installed" "filebeat"
 else
@@ -117,7 +133,7 @@ else
     if ! command -v sysctl &> /dev/null; then
         echo "sysctl is not installed. Installing..."
         log_action "not installed" "sysctl"
-        sudo apt-get install -y sysctl
+        sudo apt-get install -y procps
         echo "sysctl has been installed."
         log_action "installed" "sysctl"
     else
